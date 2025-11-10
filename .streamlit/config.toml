@@ -1,0 +1,9 @@
+[server]
+headless = true
+enableCORS = false
+
+[theme]
+base = "light"
+
+[browser]
+gatherUsageStats = false
