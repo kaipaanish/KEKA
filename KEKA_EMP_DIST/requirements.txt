@@ -4,3 +4,4 @@ openpyxl
 plotly
 kaleido
 reportlab
+chromium
