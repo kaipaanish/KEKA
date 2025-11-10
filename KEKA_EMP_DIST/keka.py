@@ -12,6 +12,9 @@ from reportlab.platypus import (
 from reportlab.lib.styles import getSampleStyleSheet
 from reportlab.lib import colors
 
+os.environ["PYPPETEER_CHROMIUM_REVISION"] = "1205505"
+os.environ["KALIEDO_CHROME_PATH"] = "/usr/bin/chromium"
+
 # -------------------------------------
 # FIX: Ensure Kaleido works on Streamlit Cloud
 # -------------------------------------
@@ -342,3 +345,4 @@ if st.button("Generate & Download PDF"):
             st.download_button("Download PDF", data=pdf_bytes, file_name=fname, mime="application/pdf")
         except Exception as e:
             st.error(f"Failed to build PDF: {e}")
+
