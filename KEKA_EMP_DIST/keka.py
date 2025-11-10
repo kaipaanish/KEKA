@@ -1,3 +1,4 @@
+import os
 import streamlit as st
 import pandas as pd
 import plotly.express as px
@@ -11,6 +12,12 @@ from reportlab.platypus import (
 from reportlab.lib.styles import getSampleStyleSheet
 from reportlab.lib import colors
 
+# -------------------------------------
+# FIX: Ensure Kaleido works on Streamlit Cloud
+# -------------------------------------
+os.environ["KALIEDO_SCOPE"] = "plotly"
+os.environ["PATH"] += os.pathsep + "/usr/bin"
+os.environ["KALIEDO_CHROME_PATH"] = "/usr/bin/chromium"
 
 # -------------------------------------
 # Safe defaults
@@ -177,9 +184,16 @@ def make_map_figure(day_df):
     return fig
 
 
+# -------------------------------------
+# FIXED: Safer image export with fallback
+# -------------------------------------
 def fig_to_png_bytes(fig, width=800, height=600, scale=2):
-    img_bytes = fig.to_image(format="png", width=width, height=height, scale=scale)
-    return BytesIO(img_bytes)
+    try:
+        img_bytes = fig.to_image(format="png", width=width, height=height, scale=scale, engine="kaleido")
+        return BytesIO(img_bytes)
+    except Exception as e:
+        print(f"[WARN] Failed to render figure: {e}")
+        return None
 
 
 # -------------------------------------
@@ -214,13 +228,14 @@ def build_pdf_all_days(employee_name, start_date, end_date, summary_df, range_df
     ]))
     story += [tbl, Spacer(1, 12)]
 
-    # One page per day
-    for idx, (dt, sub) in enumerate(sorted(range_df.groupby("Date"), key=lambda x: x[0])):
+    # Each day page
+    for dt, sub in sorted(range_df.groupby("Date"), key=lambda x: x[0]):
         story.append(PageBreak())
         story.append(Paragraph(f"<b>{pd.to_datetime(dt).strftime('%d-%b-%Y')} — Detailed Intervals</b>", styles["Heading3"]))
 
         day_df = sub.sort_values("Timestamp").reset_index(drop=True)
         day_df, _ = add_interval_distances(day_df)
+
         det_tbl_data = [["#", "Timestamp", "Latitude", "Longitude", "Δ Distance (km)"]]
         for j, r in day_df.iterrows():
             det_tbl_data.append([
@@ -240,16 +255,17 @@ def build_pdf_all_days(employee_name, start_date, end_date, summary_df, range_df
         story.append(det_tbl)
         story.append(Spacer(1, 10))
 
-        try:
-            fig = make_map_figure(day_df)
-            if fig is not None:
-                png_buf = fig_to_png_bytes(fig, width=800, height=600, scale=2)
+        fig = make_map_figure(day_df)
+        if fig:
+            png_buf = fig_to_png_bytes(fig)
+            if png_buf:
                 png_buf.seek(0)
                 story.append(Image(png_buf, width=420, height=315))
-                story.append(Spacer(1, 12))
-        except Exception as e:
-            story.append(Paragraph(f"(Could not render map for {dt}: {e})", styles["Normal"]))
-            story.append(Spacer(1, 12))
+            else:
+                story.append(Paragraph(f"(Map could not render for {dt})", styles["Normal"]))
+        else:
+            story.append(Paragraph(f"(No map data for {dt})", styles["Normal"]))
+        story.append(Spacer(1, 12))
 
     doc.build(story)
     pdf = buff.getvalue()
